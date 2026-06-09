@@ -10,6 +10,7 @@ const ROOT = __dirname;
 const TIMER_FILE = path.join(ROOT, "obs_timer.html");
 const PROFILE_DIR = path.join(ROOT, ".weflab-browser-profile");
 const DEFAULT_NAMES = ["멧돼지", "돼지"];
+const OBS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OBS/30.0.0";
 
 const clients = new Set();
 const seenEvents = new Set();
@@ -87,6 +88,7 @@ function launchBrowser(browserPath, weflabUrl) {
   const args = [
     `--remote-debugging-port=${CDP_PORT}`,
     `--user-data-dir=${PROFILE_DIR}`,
+    `--user-agent=${OBS_USER_AGENT}`,
     "--no-first-run",
     "--disable-features=Translate",
     weflabUrl
@@ -186,7 +188,7 @@ function buildAliases(names) {
 function extractRouletteEvents(text, names) {
   const aliases = buildAliases(names);
   const aliasPattern = aliases.map(escapeRegExp).sort((a, b) => b.length - a.length).join("|");
-  const timePattern = "[+-]\\s*\\d+(?:\\.\\d+)?\\s*(?:시간|시|분|초|h|hr|m|min|s|sec)";
+  const timePattern = "[+-]?\\s*\\d+(?:\\.\\d+)?\\s*(?:시간|시|분|초|h|hr|m|min|s|sec)";
   const patterns = [
     new RegExp(`(?:${aliasPattern})[^\\n]{0,80}?${timePattern}`, "gi"),
     new RegExp(`${timePattern}[^\\n]{0,80}?(?:${aliasPattern})`, "gi")
