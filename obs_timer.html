@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>위플랩 룰렛 듀얼 타이머</title>
+    <style>
+        :root {
+            --bg: rgba(0, 0, 0, 0.86);
+            --panel: rgba(10, 10, 10, 0.94);
+            --line: rgba(255, 255, 255, 0.22);
+            --text: #ffffff;
+            --muted: #a8a8a8;
+            --soft: #dedede;
+            --shadow: rgba(0, 0, 0, 0.54);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            color: var(--text);
+            font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+        }
+
+        .app {
+            display: inline-flex;
+            align-items: stretch;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--bg);
+            box-shadow: 0 14px 34px var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .timers {
+            display: inline-grid;
+            grid-template-columns: minmax(360px, 420px);
+            grid-auto-rows: 58px;
+            gap: 6px;
+            align-content: start;
+        }
+
+        .timer {
+            min-height: 58px;
+            padding: 6px 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel);
+            display: grid;
+            grid-template-rows: 31px 15px;
+            gap: 3px;
+            align-content: center;
+        }
+
+        .timer.met {
+            border-color: rgba(255, 255, 255, 0.28);
+        }
+
+        .timer.pig {
+            border-color: rgba(255, 255, 255, 0.28);
+        }
+
+        .headline {
+            grid-column: 1 / -1;
+            grid-row: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .label {
+            font-size: 17px;
+            line-height: 1;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .time {
+            color: var(--text);
+            font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+            min-width: 184px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #000000;
+            font-size: 25px;
+            line-height: 1;
+            font-weight: 900;
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            white-space: nowrap;
+            letter-spacing: 0;
+        }
+
+        .caption {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+            pointer-events: none;
+        }
+
+        .timer.running .caption strong {
+            color: var(--text);
+        }
+
+        .timer.finished {
+            animation: finishPulse 0.7s steps(2, end) infinite;
+        }
+
+        .control-panel {
+            width: 390px;
+            padding-left: 10px;
+            border-left: 1px solid var(--line);
+            display: grid;
+            gap: 6px;
+            transition: width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, border-color 0.2s ease;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: 52px repeat(5, minmax(38px, 1fr));
+            gap: 4px;
+            align-items: center;
+        }
+
+        .control-grid span,
+        .field label {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 900;
+        }
+
+        button,
+        input,
+        textarea {
+            border: 1px solid var(--line);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            font: inherit;
+        }
+
+        button {
+            min-height: 24px;
+            padding: 3px 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 900;
+        }
+
+        button:hover {
+            border-color: rgba(255, 255, 255, 0.68);
+            background: rgba(255, 255, 255, 0.16);
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 5px 7px;
+            font-size: 11px;
+            outline: none;
+        }
+
+        textarea {
+            min-height: 34px;
+            resize: vertical;
+        }
+
+        .field {
+            display: grid;
+            gap: 3px;
+        }
+
+        .source-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 4px;
+        }
+
+        .name-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+        }
+
+        .panel-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .log {
+            min-height: 18px;
+            max-height: 34px;
+            overflow: hidden;
+            color: var(--muted);
+            font-size: 10px;
+            line-height: 1.35;
+        }
+
+        .debug-log {
+            display: none;
+            min-height: 46px;
+            max-height: 78px;
+            overflow: auto;
+            padding: 5px 7px;
+            border: 1px solid var(--line);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--soft);
+            font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+            font-size: 10px;
+            line-height: 1.35;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        body.debug-visible .debug-log {
+            display: block;
+        }
+
+        iframe {
+            position: fixed;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        body.controls-hidden .control-panel {
+            width: 0;
+            opacity: 0;
+            overflow: hidden;
+            padding-left: 0;
+            border-left-color: transparent;
+            pointer-events: none;
+        }
+
+        @keyframes finishPulse {
+            0%, 100% {
+                filter: brightness(1.08);
+            }
+            50% {
+                filter: brightness(1.6);
+            }
+        }
+
+        @media (max-width: 900px) {
+            .app,
+            .timers {
+                grid-template-columns: 1fr;
+                flex-direction: column;
+            }
+
+            .control-panel {
+                width: 100%;
+                padding-left: 0;
+                padding-top: 8px;
+                border-left: 0;
+                border-top: 1px solid var(--line);
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="app" aria-label="위플랩 룰렛 듀얼 타이머">
+        <section class="timers">
+            <article class="timer met" id="metSection">
+                <div class="headline">
+                    <span class="label" id="metLabel">멧돼지</span>
+                    <span class="time" id="metDisplay">0시간</span>
+                </div>
+                <div class="caption">
+                    <span id="metDetail">00분 00초</span>
+                    <strong id="metStatus">대기</strong>
+                </div>
+            </article>
+
+            <article class="timer pig" id="pigSection">
+                <div class="headline">
+                    <span class="label" id="pigLabel">돼지</span>
+                    <span class="time" id="pigDisplay">0시간</span>
+                </div>
+                <div class="caption">
+                    <span id="pigDetail">00분 00초</span>
+                    <strong id="pigStatus">대기</strong>
+                </div>
+            </article>
+        </section>
+
+        <aside class="control-panel" id="controlPanel" aria-label="타이머 조작 패널">
+            <div class="control-grid">
+                <span id="metControlLabel">멧돼지</span>
+                <button type="button" data-action="add" data-timer="met" data-seconds="3600">+1시간</button>
+                <button type="button" data-action="add" data-timer="met" data-seconds="600">+10분</button>
+                <button type="button" data-action="start" data-timer="met">시작</button>
+                <button type="button" data-action="stop" data-timer="met">정지</button>
+                <button type="button" data-action="reset" data-timer="met">리셋</button>
+            </div>
+
+            <div class="control-grid">
+                <span id="pigControlLabel">돼지</span>
+                <button type="button" data-action="add" data-timer="pig" data-seconds="3600">+1시간</button>
+                <button type="button" data-action="add" data-timer="pig" data-seconds="600">+10분</button>
+                <button type="button" data-action="start" data-timer="pig">시작</button>
+                <button type="button" data-action="stop" data-timer="pig">정지</button>
+                <button type="button" data-action="reset" data-timer="pig">리셋</button>
+            </div>
+
+            <div class="field">
+                <label for="weflabUrl">위플랩 후원알림 URL</label>
+                <div class="source-row">
+                    <input id="weflabUrl" placeholder="https://weflab.com/..." autocomplete="off">
+                    <button type="button" id="loadSource">연결</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>타이머 이름</label>
+                <div class="name-row">
+                    <input id="metNameInput" placeholder="멧돼지" autocomplete="off">
+                    <input id="pigNameInput" placeholder="돼지" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="rouletteInput">룰렛 결과 테스트</label>
+                <textarea id="rouletteInput" placeholder="예:
+멧돼지 +1시간
+돼지 -30분
+Result: 돼지, 룰렛 내용: +2시간"></textarea>
+            </div>
+
+            <div class="panel-actions">
+                <button type="button" id="applyMetRoulette">멧돼지 적용</button>
+                <button type="button" id="applyPigRoulette">돼지 적용</button>
+                <button type="button" id="applyRoulette">전체 적용</button>
+                <button type="button" id="toggleDebug">디버그</button>
+                <button type="button" id="copyDebug">복사</button>
+                <button type="button" id="toggleControls">패널 숨김</button>
+            </div>
+
+            <div class="log" id="eventLog">대기 중</div>
+            <pre class="debug-log" id="debugLog">수신 대기 중</pre>
+        </aside>
+    </main>
+
+    <iframe id="weflabFrame" title="위플랩 후원알림 모니터"></iframe>
+
+    <script>
+        const STORAGE_KEY = "weflab-dual-roulette-timer-v1";
+        const timers = {};
+        const debugEvents = [];
+        const timerNames = {
+            met: "멧돼지",
+            pig: "돼지"
+        };
+        const timerAliases = {
+            met: ["멧돼지", "맷돼지", "멧"],
+            pig: ["돼지", "대지"]
+        };
+
+        class Timer {
+            constructor({ id, display, detail, section, status, state }) {
+                this.id = id;
+                this.display = display;
+                this.detail = detail;
+                this.section = section;
+                this.status = status;
+                this.intervalId = null;
+                this.secondsLeft = Math.max(0, Number(state?.secondsLeft) || 0);
+                this.isRunning = Boolean(state?.isRunning);
+                this.endsAt = Number(state?.endsAt) || null;
+                this.finished = Boolean(state?.finished);
+                this.restore();
+                this.render();
+                if (this.isRunning) this.startTicking();
+            }
+
+            restore() {
+                if (!this.isRunning || !this.endsAt) return;
+                this.secondsLeft = Math.max(0, Math.ceil((this.endsAt - Date.now()) / 1000));
+                if (this.secondsLeft === 0) {
+                    this.isRunning = false;
+                    this.endsAt = null;
+                    this.finished = true;
+                }
+            }
+
+            add(seconds, autoStart = true) {
+                this.syncFromClock();
+                this.secondsLeft = Math.max(0, this.secondsLeft + seconds);
+                this.finished = false;
+                if (this.secondsLeft === 0) {
+                    this.isRunning = false;
+                    this.endsAt = null;
+                    this.stopTicking();
+                } else if (this.isRunning || autoStart) {
+                    this.isRunning = true;
+                    this.endsAt = Date.now() + this.secondsLeft * 1000;
+                    this.startTicking();
+                }
+                this.renderAndSave();
+            }
+
+            start() {
+                if (this.isRunning || this.secondsLeft <= 0) return;
+                this.isRunning = true;
+                this.finished = false;
+                this.endsAt = Date.now() + this.secondsLeft * 1000;
+                this.startTicking();
+                this.renderAndSave();
+            }
+
+            stop() {
+                if (!this.isRunning) return;
+                this.syncFromClock();
+                this.isRunning = false;
+                this.endsAt = null;
+                this.stopTicking();
+                this.renderAndSave();
+            }
+
+            reset() {
+                this.stopTicking();
+                this.secondsLeft = 0;
+                this.isRunning = false;
+                this.endsAt = null;
+                this.finished = false;
+                this.renderAndSave();
+            }
+
+            startTicking() {
+                this.stopTicking();
+                this.intervalId = window.setInterval(() => this.tick(), 250);
+            }
+
+            stopTicking() {
+                if (this.intervalId === null) return;
+                window.clearInterval(this.intervalId);
+                this.intervalId = null;
+            }
+
+            tick() {
+                this.syncFromClock();
+                if (this.secondsLeft > 0) {
+                    this.renderAndSave();
+                    return;
+                }
+                this.isRunning = false;
+                this.endsAt = null;
+                this.finished = true;
+                this.stopTicking();
+                this.renderAndSave();
+            }
+
+            syncFromClock() {
+                if (!this.endsAt) return;
+                this.secondsLeft = Math.max(0, Math.ceil((this.endsAt - Date.now()) / 1000));
+            }
+
+            renderAndSave() {
+                this.render();
+                saveState();
+            }
+
+            render() {
+                const hours = Math.floor(this.secondsLeft / 3600);
+                const minutes = Math.floor((this.secondsLeft % 3600) / 60);
+                const seconds = this.secondsLeft % 60;
+                this.display.textContent = `${hours}시간 ${String(minutes).padStart(2, "0")}분`;
+                this.detail.textContent = `${String(seconds).padStart(2, "0")}초`;
+                this.section.classList.toggle("running", this.isRunning);
+                this.section.classList.toggle("finished", this.finished && this.secondsLeft === 0);
+                this.status.textContent = this.finished ? "종료" : this.isRunning ? "진행" : this.secondsLeft > 0 ? "정지" : "대기";
+            }
+
+            toJSON() {
+                return {
+                    secondsLeft: this.secondsLeft,
+                    isRunning: this.isRunning,
+                    endsAt: this.endsAt,
+                    finished: this.finished
+                };
+            }
+        }
+
+        function loadState() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+            } catch {
+                return {};
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                controlsHidden: document.body.classList.contains("controls-hidden"),
+                weflabUrl: document.getElementById("weflabUrl")?.value || "",
+                timerNames: {
+                    met: timerNames.met,
+                    pig: timerNames.pig
+                },
+                timers: {
+                    met: timers.met?.toJSON(),
+                    pig: timers.pig?.toJSON()
+                }
+            }));
+        }
+
+        function getTimerAliases(timerId) {
+            return [...new Set([timerNames[timerId], ...(timerAliases[timerId] || [])].filter(Boolean))];
+        }
+
+        function setTimerName(timerId, name) {
+            const fallback = timerId === "met" ? "멧돼지" : "돼지";
+            timerNames[timerId] = String(name || "").trim() || fallback;
+
+            const label = document.getElementById(`${timerId}Label`);
+            const controlLabel = document.getElementById(`${timerId}ControlLabel`);
+            const input = document.getElementById(`${timerId}NameInput`);
+            const applyButton = document.getElementById(timerId === "met" ? "applyMetRoulette" : "applyPigRoulette");
+            if (label) label.textContent = timerNames[timerId];
+            if (controlLabel) controlLabel.textContent = timerNames[timerId];
+            if (input) input.value = timerNames[timerId];
+            if (applyButton) applyButton.textContent = `${timerNames[timerId]} 적용`;
+        }
+
+        function applyTimerNames(names = {}) {
+            setTimerName("met", names.met);
+            setTimerName("pig", names.pig);
+        }
+
+        function escapeRegExp(value) {
+            return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        }
+
+        function splitRouletteEntries(text) {
+            const aliases = [...getTimerAliases("met"), ...getTimerAliases("pig")]
+                .sort((a, b) => b.length - a.length)
+                .map(escapeRegExp)
+                .join("|");
+            const splitPattern = aliases
+                ? new RegExp(`\\n|\\/(?=\\s*(?:${aliases})\\s*[+-]?\\d)`, "g")
+                : /\n/g;
+            return String(text)
+                .split(splitPattern)
+                .map((entry) => entry.trim().replace(/^\/+|\/+$/g, "").trim())
+                .filter(Boolean);
+        }
+
+        function parseRoulettePayload(payload, fallbackTimerId = null) {
+            const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+            const result = String(payload?.Result || payload?.result || payload?.roulette || payload?.["룰렛"] || "");
+            const content = String(payload?.content || payload?.item || payload?.rouletteContent || payload?.["룰렛 내용"] || payload?.message || raw);
+            const text = `${result} ${content}`.trim();
+            const timerId = findTimerId(text) || fallbackTimerId;
+            const seconds = parseTimeDelta(text);
+            return { raw, text, timerId, seconds };
+        }
+
+        function findTimerId(text) {
+            const normalized = String(text).replace(/\s+/g, "");
+            for (const timerId of Object.keys(timerAliases)) {
+                const aliases = getTimerAliases(timerId);
+                if (aliases.some((alias) => normalized.includes(alias))) return timerId;
+            }
+            return null;
+        }
+
+        function parseTimeDelta(text) {
+            const valueText = String(text).replace(/,/g, "");
+            let total = 0;
+            const timePattern = /([+-]?\d+(?:\.\d+)?)\s*(시간|시|분|초|h|hr|m|min|s|sec)/gi;
+            let match;
+            while ((match = timePattern.exec(valueText))) {
+                const value = Number(match[1]);
+                const unit = match[2].toLowerCase();
+                if (unit === "시간" || unit === "시" || unit === "h" || unit === "hr") total += value * 3600;
+                if (unit === "분" || unit === "m" || unit === "min") total += value * 60;
+                if (unit === "초" || unit === "s" || unit === "sec") total += value;
+            }
+            if (total !== 0) return Math.round(total);
+
+            const bareNumber = valueText.match(/([+-]?\d+(?:\.\d+)?)/);
+            return bareNumber ? Math.round(Number(bareNumber[1]) * 3600) : 0;
+        }
+
+        function isIgnorablePayload(payload) {
+            if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+            const hasRouletteData = payload.Result || payload.result || payload.roulette || payload.content || payload.item || payload.rouletteContent || payload.message;
+            return !hasRouletteData && (payload.uniConnect || payload.connected || payload.type === "connect" || payload.type === "connected");
+        }
+
+        function isConnectionPayload(payload) {
+            return Boolean(payload && typeof payload === "object" && (payload.uniConnect || payload.connected || payload.type === "connect" || payload.type === "connected"));
+        }
+
+        function applyRoulettePayload(payload, fallbackTimerId = null) {
+            if (isIgnorablePayload(payload)) return false;
+
+            const parsed = parseRoulettePayload(payload, fallbackTimerId);
+            if (!parsed.timerId || !parsed.seconds) {
+                writeLog(`적용 안 됨: ${parsed.text || parsed.raw}`);
+                return false;
+            }
+            timers[parsed.timerId].add(parsed.seconds, true);
+            const name = timerNames[parsed.timerId] || (parsed.timerId === "met" ? "멧돼지" : "돼지");
+            const sign = parsed.seconds > 0 ? "+" : "";
+            writeLog(`${name} ${sign}${formatDelta(parsed.seconds)} 적용`);
+            return true;
+        }
+
+        function applyRouletteText(text, fallbackTimerId = null) {
+            const entries = splitRouletteEntries(text);
+            const targets = entries.length > 0 ? entries : [text];
+            let applied = 0;
+            for (const entry of targets) {
+                if (applyRoulettePayload(entry, fallbackTimerId)) applied += 1;
+            }
+            if (applied > 1) writeLog(`${applied}개 룰렛 결과 적용`);
+            return applied;
+        }
+
+        function applyInputRoulette(fallbackTimerId = null) {
+            const input = document.getElementById("rouletteInput");
+            const applied = applyRouletteText(input.value, fallbackTimerId);
+            if (applied > 0) input.value = "";
+        }
+
+        function formatDelta(seconds) {
+            const abs = Math.abs(seconds);
+            const hours = Math.floor(abs / 3600);
+            const minutes = Math.floor((abs % 3600) / 60);
+            const secs = abs % 60;
+            const parts = [];
+            if (hours) parts.push(`${hours}시간`);
+            if (minutes) parts.push(`${minutes}분`);
+            if (secs || parts.length === 0) parts.push(`${secs}초`);
+            return parts.join(" ");
+        }
+
+        function writeLog(message) {
+            document.getElementById("eventLog").textContent = `${new Date().toLocaleTimeString("ko-KR")}  ${message}`;
+        }
+
+        function stringifyDebugPayload(payload) {
+            if (typeof payload === "string") return payload;
+            try {
+                return JSON.stringify(payload);
+            } catch {
+                return String(payload);
+            }
+        }
+
+        function recordDebugPayload(payload) {
+            const line = `${new Date().toLocaleTimeString("ko-KR")} ${stringifyDebugPayload(payload)}`;
+            debugEvents.unshift(line);
+            debugEvents.splice(12);
+            const log = document.getElementById("debugLog");
+            if (log) log.textContent = debugEvents.join("\n") || "수신 대기 중";
+        }
+
+        async function copyDebugLog() {
+            const text = debugEvents.join("\n");
+            if (!text) {
+                writeLog("복사할 디버그 메시지가 없습니다.");
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(text);
+                writeLog("디버그 메시지 복사됨");
+            } catch {
+                writeLog("복사 실패: 디버그 창 내용을 직접 선택해 주세요.");
+            }
+        }
+
+        function setControlsHidden(hidden) {
+            document.body.classList.toggle("controls-hidden", hidden);
+            document.getElementById("toggleControls").textContent = hidden ? "패널 표시" : "패널 숨김";
+            saveState();
+        }
+
+        function loadWeflabSource() {
+            const input = document.getElementById("weflabUrl");
+            const url = input.value.trim();
+            if (!url) {
+                writeLog("위플랩 후원알림 URL을 입력해 주세요.");
+                return;
+            }
+            document.getElementById("weflabFrame").src = url;
+            writeLog("위플랩 URL 연결 대기 중");
+            saveState();
+        }
+
+        function init() {
+            const savedState = loadState();
+            const params = new URLSearchParams(window.location.search);
+            const controlsHidden = params.get("controls") === "0" || params.get("panel") === "0" || Boolean(savedState.controlsHidden);
+
+            document.getElementById("weflabUrl").value = params.get("weflab") || savedState.weflabUrl || "";
+            applyTimerNames(savedState.timerNames);
+
+            timers.met = new Timer({
+                id: "met",
+                display: document.getElementById("metDisplay"),
+                detail: document.getElementById("metDetail"),
+                section: document.getElementById("metSection"),
+                status: document.getElementById("metStatus"),
+                state: savedState.timers?.met
+            });
+
+            timers.pig = new Timer({
+                id: "pig",
+                display: document.getElementById("pigDisplay"),
+                detail: document.getElementById("pigDetail"),
+                section: document.getElementById("pigSection"),
+                status: document.getElementById("pigStatus"),
+                state: savedState.timers?.pig
+            });
+
+            document.getElementById("controlPanel").addEventListener("click", (event) => {
+                const button = event.target.closest("button[data-action]");
+                if (!button) return;
+                const timer = timers[button.dataset.timer];
+                if (!timer) return;
+                if (button.dataset.action === "add") timer.add(Number(button.dataset.seconds), false);
+                if (button.dataset.action === "start") timer.start();
+                if (button.dataset.action === "stop") timer.stop();
+                if (button.dataset.action === "reset") timer.reset();
+            });
+
+            document.getElementById("applyMetRoulette").addEventListener("click", () => applyInputRoulette("met"));
+            document.getElementById("applyPigRoulette").addEventListener("click", () => applyInputRoulette("pig"));
+            document.getElementById("applyRoulette").addEventListener("click", () => applyInputRoulette());
+            document.getElementById("loadSource").addEventListener("click", loadWeflabSource);
+            document.getElementById("toggleControls").addEventListener("click", () => {
+                setControlsHidden(!document.body.classList.contains("controls-hidden"));
+            });
+            document.getElementById("toggleDebug").addEventListener("click", () => {
+                document.body.classList.toggle("debug-visible");
+            });
+            document.getElementById("copyDebug").addEventListener("click", copyDebugLog);
+            document.getElementById("weflabUrl").addEventListener("change", saveState);
+            document.getElementById("metNameInput").addEventListener("input", (event) => {
+                setTimerName("met", event.target.value);
+                saveState();
+            });
+            document.getElementById("pigNameInput").addEventListener("input", (event) => {
+                setTimerName("pig", event.target.value);
+                saveState();
+            });
+
+            window.addEventListener("message", (event) => {
+                recordDebugPayload(event.data);
+                if (isConnectionPayload(event.data)) {
+                    writeLog("위플랩 URL 연결됨");
+                    return;
+                }
+                if (event.data) applyRoulettePayload(event.data);
+            });
+
+            document.addEventListener("keydown", (event) => {
+                if (event.key.toLowerCase() === "h") setControlsHidden(!document.body.classList.contains("controls-hidden"));
+            });
+
+            setControlsHidden(controlsHidden);
+            if (document.getElementById("weflabUrl").value.trim()) loadWeflabSource();
+            saveState();
+        }
+
+        window.applyWeflabRoulette = (payload) => typeof payload === "string" ? applyRouletteText(payload) : applyRoulettePayload(payload);
+        window.addMetTime = (seconds) => timers.met.add(seconds, true);
+        window.addPigTime = (seconds) => timers.pig.add(seconds, true);
+        window.startMetTimer = () => timers.met.start();
+        window.startPigTimer = () => timers.pig.start();
+        window.stopMetTimer = () => timers.met.stop();
+        window.stopPigTimer = () => timers.pig.stop();
+        window.resetMetTimer = () => timers.met.reset();
+        window.resetPigTimer = () => timers.pig.reset();
+
+        init();
+    </script>
+</body>
+</html>
