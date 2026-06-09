@@ -13,7 +13,7 @@ const DEFAULT_NAMES = ["멧돼지", "돼지"];
 const OBS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OBS/30.0.0";
 
 const clients = new Set();
-const seenEvents = new Set();
+const recentEvents = new Map();
 
 function question(rl, text) {
   return new Promise((resolve) => rl.question(text, resolve));
@@ -209,6 +209,24 @@ function extractRouletteEvents(text, names) {
   return [...new Set(events)];
 }
 
+function getEventKey(text, names) {
+  const aliases = buildAliases(names).sort((a, b) => b.length - a.length);
+  const compact = String(text).replace(/\s+/g, "");
+  const alias = aliases.find((name) => compact.includes(name.replace(/\s+/g, ""))) || "";
+  const time = compact.match(/[+-]?\d+(?:\.\d+)?(?:시간|시|분|초|h|hr|m|min|s|sec)/i)?.[0] || "";
+  return `${alias}:${time}` || compact;
+}
+
+function wasRecentlySent(key, windowMs = 20000) {
+  const now = Date.now();
+  for (const [eventKey, sentAt] of recentEvents) {
+    if (now - sentAt > windowMs) recentEvents.delete(eventKey);
+  }
+  if (recentEvents.has(key)) return true;
+  recentEvents.set(key, now);
+  return false;
+}
+
 async function monitorPage(cdp, names) {
   let lastText = "";
   console.log("위플랩 페이지 감지 시작");
@@ -228,10 +246,8 @@ async function monitorPage(cdp, names) {
       const events = extractRouletteEvents(`${changedText}\n${normalized}`, names);
 
       for (const eventText of events) {
-        const key = eventText.replace(/\s+/g, "");
-        if (seenEvents.has(key)) continue;
-        seenEvents.add(key);
-        if (seenEvents.size > 200) seenEvents.clear();
+        const key = getEventKey(eventText, names);
+        if (wasRecentlySent(key)) continue;
         broadcastRoulette(eventText);
       }
     } catch (error) {
