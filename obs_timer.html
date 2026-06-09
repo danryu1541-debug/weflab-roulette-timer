@@ -712,6 +712,28 @@ Result: 돼지, 룰렛 내용: +2시간"></textarea>
             saveState();
         }
 
+        function connectLocalMonitor() {
+            if (!window.EventSource) return;
+
+            const source = new EventSource("http://127.0.0.1:17354/events");
+            source.addEventListener("open", () => {
+                writeLog("로컬 감지 프로그램 연결됨");
+            });
+            source.addEventListener("roulette", (event) => {
+                recordDebugPayload(event.data);
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (payload.text) applyRouletteText(payload.text);
+                    else applyRoulettePayload(payload);
+                } catch {
+                    applyRouletteText(event.data);
+                }
+            });
+            source.addEventListener("error", () => {
+                writeLog("로컬 감지 프로그램 대기 중");
+            });
+        }
+
         function init() {
             const savedState = loadState();
             const params = new URLSearchParams(window.location.search);
@@ -785,6 +807,7 @@ Result: 돼지, 룰렛 내용: +2시간"></textarea>
 
             setControlsHidden(controlsHidden);
             if (document.getElementById("weflabUrl").value.trim()) loadWeflabSource();
+            connectLocalMonitor();
             saveState();
         }
 
