@@ -11,9 +11,11 @@ const TIMER_FILE = path.join(ROOT, "obs_timer.html");
 const PROFILE_DIR = path.join(ROOT, ".weflab-browser-profile");
 const DEFAULT_NAMES = ["멧돼지", "돼지"];
 const OBS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OBS/30.0.0";
+const DETECTION_COOLDOWN_MS = 15000;
 
 const clients = new Set();
 const recentEvents = new Map();
+let nextDetectionAllowedAt = 0;
 
 function question(rl, text) {
   return new Promise((resolve) => rl.question(text, resolve));
@@ -264,11 +266,14 @@ async function monitorPage(cdp, names) {
         .filter((line) => !previous.includes(line))
         .join("\n");
       const events = extractRouletteEvents(`${changedText}\n${normalized}`, names);
+      if (events.length === 0 || Date.now() < nextDetectionAllowedAt) return;
 
       for (const eventText of events) {
         const key = getEventKey(eventText, names);
         if (wasRecentlySent(key)) continue;
         broadcastRoulette(eventText);
+        nextDetectionAllowedAt = Date.now() + DETECTION_COOLDOWN_MS;
+        break;
       }
     } catch (error) {
       console.log(`[감지 오류] ${error.message}`);
