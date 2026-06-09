@@ -193,11 +193,31 @@ function extractRouletteEvents(text, names) {
     new RegExp(`(?:${aliasPattern})[^\\n]{0,80}?${timePattern}`, "gi"),
     new RegExp(`${timePattern}[^\\n]{0,80}?(?:${aliasPattern})`, "gi")
   ];
-  const lines = normalizeText(text).split("\n");
-  const events = [];
+  const normalized = normalizeText(text);
 
-  for (const line of lines) {
+  const resultMarker = normalized.match(/룰렛\s*결과(?:는|은|:)?/);
+  if (resultMarker && typeof resultMarker.index === "number") {
+    const resultArea = normalized.slice(resultMarker.index + resultMarker[0].length, resultMarker.index + resultMarker[0].length + 180);
+    const resultEvents = collectRouletteMatches(resultArea, patterns);
+    if (resultEvents.length > 0) return [resultEvents[0]];
+  }
+
+  const lines = normalized.split("\n");
+  const resultLineIndex = lines.findIndex((line) => /룰렛\s*결과/.test(line));
+  if (resultLineIndex >= 0) {
+    const nearbyText = lines.slice(resultLineIndex, resultLineIndex + 4).join("\n");
+    const nearbyEvents = collectRouletteMatches(nearbyText, patterns);
+    if (nearbyEvents.length > 0) return [nearbyEvents[nearbyEvents.length - 1]];
+  }
+
+  return collectRouletteMatches(normalized, patterns).slice(-1);
+}
+
+function collectRouletteMatches(text, patterns) {
+  const events = [];
+  for (const line of normalizeText(text).split("\n")) {
     for (const pattern of patterns) {
+      pattern.lastIndex = 0;
       const matches = line.match(pattern) || [];
       for (const match of matches) {
         const clean = match.replace(/\s+/g, " ").trim();
