@@ -1,1 +1,4 @@
 .weflab-browser-profile/
+publish/
+launcher/bin/
+launcher/obj/

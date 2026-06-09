@@ -10,7 +10,7 @@
 
 1. 저장소 파일 목록에서 `weflab-roulette-timer.zip`을 클릭합니다.
 2. 오른쪽 위 `Download raw file` 버튼을 눌러 다운로드합니다.
-3. 압축을 풀고 `start_monitor.bat`을 실행합니다.
+3. 압축을 풀고 `start_monitor.exe`를 실행합니다.
 
 릴리즈 페이지를 사용하지 않아도 위 zip 파일만 받으면 바로 사용할 수 있습니다.
 
@@ -29,12 +29,23 @@
 
 - `obs_timer.html`: 실제 타이머 파일
 - `monitor.js`: 위플랩 룰렛 결과를 감지하는 로컬 프로그램
+- `start_monitor.exe`: 더블클릭 실행용 프로그램
 - `start_monitor.bat`: 감지 프로그램 실행 파일
 - `사용법.txt`: 간단 사용법
 
+## 실행 전 준비
+
+이 프로그램은 감지 로직을 Node.js로 실행합니다. 실행 PC에 Node.js가 설치되어 있어야 합니다.
+
+Node.js 다운로드:
+
+```text
+https://nodejs.org/
+```
+
 ## 자동화 사용 방법
 
-1. `start_monitor.bat`을 실행합니다.
+1. `start_monitor.exe`를 실행합니다.
 2. 위플랩 후원알림 URL을 입력합니다.
 3. 첫 번째 타이머 이름과 두 번째 타이머 이름을 입력합니다.
    - 기본값은 `멧돼지`, `돼지`입니다.
@@ -118,7 +129,7 @@ obs_timer.html?controls=0
 
 - 위플랩 화면의 텍스트를 감지하는 방식이라, 위플랩 알림 문구 구조가 바뀌면 감지 규칙 조정이 필요할 수 있습니다.
 - 첫 실행 시 Windows 방화벽 또는 브라우저 보안 확인 창이 뜰 수 있습니다.
-- `start_monitor.bat` 실행 중에는 열린 Edge/Chrome 창을 닫지 않는 것이 좋습니다.
+- `start_monitor.exe` 실행 중에는 열린 Edge/Chrome 창을 닫지 않는 것이 좋습니다.
 - OBS에는 로컬 파일이 아니라 `http://127.0.0.1:17354/timer` 주소를 넣는 것을 권장합니다.
 
 ## 배포 상태
