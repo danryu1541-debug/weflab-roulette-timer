@@ -233,6 +233,63 @@ function collectRouletteMatches(text, patterns) {
   return [...new Set(events)];
 }
 
+function getVisibleTextScript() {
+  return `(() => {
+    const items = [];
+    const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const text = (node.nodeValue || "").replace(/\\s+/g, " ").trim();
+      if (!text) continue;
+
+      const element = node.parentElement;
+      if (!element) continue;
+
+      const style = window.getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) continue;
+
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      if (rect.bottom < 0 || rect.right < 0 || rect.top > window.innerHeight || rect.left > window.innerWidth) continue;
+
+      items.push({
+        text,
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        fontSize: parseFloat(style.fontSize) || 0
+      });
+    }
+    return JSON.stringify(items);
+  })()`;
+}
+
+function findVisibleRouletteResult(items, names) {
+  const aliases = buildAliases(names);
+  const aliasPattern = aliases.map(escapeRegExp).sort((a, b) => b.length - a.length).join("|");
+  const resultPattern = new RegExp(`(?:${aliasPattern})\\s*[+-]?\\s*\\d+(?:\\.\\d+)?\\s*(?:시간|시|분|초|h|hr|m|min|s|sec)`, "i");
+  const titleItems = items.filter((item) => /룰렛\s*결과/.test(item.text));
+
+  if (titleItems.length > 0) {
+    const title = titleItems.sort((a, b) => b.y - a.y)[0];
+    const below = items
+      .filter((item) => item.y >= title.y && item.y <= title.y + 220 && resultPattern.test(item.text))
+      .sort((a, b) => {
+        const distanceA = Math.abs(a.y - title.y);
+        const distanceB = Math.abs(b.y - title.y);
+        if (distanceA !== distanceB) return distanceA - distanceB;
+        return b.fontSize - a.fontSize;
+      });
+    if (below[0]) return below[0].text;
+  }
+
+  const candidates = items
+    .filter((item) => resultPattern.test(item.text))
+    .sort((a, b) => (b.fontSize - a.fontSize) || (b.y - a.y));
+  return candidates[0]?.text || "";
+}
+
 function getEventKey(text, names) {
   const aliases = buildAliases(names).sort((a, b) => b.length - a.length);
   const compact = String(text).replace(/\s+/g, "");
@@ -318,9 +375,18 @@ function runSelfTest() {
   ];
 
   const passed = expected.every((line, index) => results[index] === line);
+  const visibleResult = findVisibleRouletteResult([
+    { text: "멧돼지 30분", y: 120, fontSize: 14 },
+    { text: "돼지 10분", y: 150, fontSize: 14 },
+    { text: "위플랩도우미님 치즈 1,000개 룰렛 결과는!", y: 500, fontSize: 24 },
+    { text: "돼지 30분", y: 560, fontSize: 30 }
+  ], names);
+  const visiblePassed = visibleResult === "돼지 30분";
+
   console.log(results.join("\n"));
-  console.log(passed ? "SELF TEST OK" : "SELF TEST FAILED");
-  process.exit(passed ? 0 : 1);
+  console.log(`VISIBLE RESULT: ${visibleResult}`);
+  console.log(passed && visiblePassed ? "SELF TEST OK" : "SELF TEST FAILED");
+  process.exit(passed && visiblePassed ? 0 : 1);
 }
 
 async function monitorPage(cdp, names) {
@@ -329,7 +395,10 @@ async function monitorPage(cdp, names) {
 
   setInterval(async () => {
     try {
-      const text = await cdp.evaluate("document.body ? document.body.innerText : ''");
+      const visibleItemsJson = await cdp.evaluate(getVisibleTextScript());
+      const visibleItems = JSON.parse(visibleItemsJson || "[]");
+      const visibleResult = findVisibleRouletteResult(visibleItems, names);
+      const text = visibleItems.map((item) => item.text).join("\n");
       const normalized = normalizeText(text);
       if (!normalized) return;
 
@@ -343,8 +412,8 @@ async function monitorPage(cdp, names) {
       // 페이지 전체 텍스트가 이전과 같아도 룰렛 결과는 같은 문구로 반복될 수 있습니다.
       // 따라서 변경된 줄이 없을 때도 현재 화면 전체를 다시 분석하고,
       // 실제 중복 여부는 lastAppliedEvent와 DUPLICATE_WINDOW_MS로만 판단합니다.
-      const sourceText = changedText ? `${changedText}\n${normalized}` : normalized;
-      const events = extractRouletteEvents(sourceText, names);
+      const sourceText = visibleResult || (changedText ? `${changedText}\n${normalized}` : normalized);
+      const events = visibleResult ? [visibleResult] : extractRouletteEvents(sourceText, names);
       if (events.length === 0) {
         resetActiveResult();
         return;
