@@ -11,11 +11,10 @@ const TIMER_FILE = path.join(ROOT, "obs_timer.html");
 const PROFILE_DIR = path.join(ROOT, ".weflab-browser-profile");
 const DEFAULT_NAMES = ["멧돼지", "돼지"];
 const OBS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OBS/30.0.0";
-const DETECTION_COOLDOWN_MS = 15000;
+const DUPLICATE_WINDOW_MS = 5000;
 
 const clients = new Set();
-const recentEvents = new Map();
-let nextDetectionAllowedAt = 0;
+let lastAppliedEvent = null;
 
 function question(rl, text) {
   return new Promise((resolve) => rl.question(text, resolve));
@@ -82,7 +81,7 @@ function broadcastRoulette(text, source = "weflab") {
   for (const client of clients) {
     client.write(`event: roulette\ndata: ${payload}\n\n`);
   }
-  console.log(`[적용 전송] ${text}`);
+  console.log(`[적용] ${text}`);
 }
 
 function launchBrowser(browserPath, weflabUrl) {
@@ -239,14 +238,33 @@ function getEventKey(text, names) {
   return `${alias}:${time}` || compact;
 }
 
-function wasRecentlySent(key, windowMs = 20000) {
+// 마지막으로 실제 적용한 결과만 기준으로 중복을 판단합니다.
+// 서로 다른 결과는 시간 간격과 관계없이 바로 적용하고,
+// 같은 결과가 5초 이내 다시 감지된 경우에만 중복으로 무시합니다.
+function isDuplicateOfLastApplied(key, text, now = Date.now()) {
+  if (!lastAppliedEvent) return false;
+  if (lastAppliedEvent.key !== key) return false;
+
+  const elapsedMs = now - lastAppliedEvent.at;
+  if (elapsedMs > DUPLICATE_WINDOW_MS) return false;
+
+  const elapsedSeconds = Math.max(1, Math.ceil(elapsedMs / 1000));
+  console.log(`[중복 무시] ${text} (${elapsedSeconds}초 이내 재감지)`);
+  return true;
+}
+
+function markApplied(key, text, now = Date.now()) {
+  lastAppliedEvent = { key, text, at: now };
+}
+
+function applyDetectedRoulette(eventText, names) {
   const now = Date.now();
-  for (const [eventKey, sentAt] of recentEvents) {
-    if (now - sentAt > windowMs) recentEvents.delete(eventKey);
-  }
-  if (recentEvents.has(key)) return true;
-  recentEvents.set(key, now);
-  return false;
+  const key = getEventKey(eventText, names);
+  if (isDuplicateOfLastApplied(key, eventText, now)) return false;
+
+  broadcastRoulette(eventText);
+  markApplied(key, eventText, now);
+  return true;
 }
 
 async function monitorPage(cdp, names) {
@@ -266,14 +284,10 @@ async function monitorPage(cdp, names) {
         .filter((line) => !previous.includes(line))
         .join("\n");
       const events = extractRouletteEvents(`${changedText}\n${normalized}`, names);
-      if (events.length === 0 || Date.now() < nextDetectionAllowedAt) return;
+      if (events.length === 0) return;
 
       for (const eventText of events) {
-        const key = getEventKey(eventText, names);
-        if (wasRecentlySent(key)) continue;
-        broadcastRoulette(eventText);
-        nextDetectionAllowedAt = Date.now() + DETECTION_COOLDOWN_MS;
-        break;
+        if (applyDetectedRoulette(eventText, names)) break;
       }
     } catch (error) {
       console.log(`[감지 오류] ${error.message}`);
