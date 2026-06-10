@@ -15,6 +15,7 @@ const DUPLICATE_WINDOW_MS = 5000;
 
 const clients = new Set();
 let lastAppliedEvent = null;
+let activeResultKey = null;
 
 function question(rl, text) {
   return new Promise((resolve) => rl.question(text, resolve));
@@ -211,7 +212,9 @@ function extractRouletteEvents(text, names) {
     if (nearbyEvents.length > 0) return [nearbyEvents[nearbyEvents.length - 1]];
   }
 
-  return collectRouletteMatches(normalized, patterns).slice(-1);
+  // 결과 표시 문구가 없는 상태에서는 룰렛 후보 목록을 실제 결과로 착각하지 않습니다.
+  // 이때 빈 배열을 반환해야 activeResultKey가 초기화되어 다음 룰렛 결과를 새 이벤트로 볼 수 있습니다.
+  return [];
 }
 
 function collectRouletteMatches(text, patterns) {
@@ -257,13 +260,21 @@ function markApplied(key, text, now = Date.now()) {
   lastAppliedEvent = { key, text, at: now };
 }
 
-function applyDetectedRoulette(eventText, names) {
-  const now = Date.now();
+function handleDetectedRoulette(eventText, names) {
   const key = getEventKey(eventText, names);
-  if (isDuplicateOfLastApplied(key, eventText, now)) return false;
+
+  // 같은 결과가 화면에 계속 떠 있는 동안에는 재감지해도 다시 처리하지 않습니다.
+  // 결과 문구가 사라진 뒤 다시 나타나거나, 다른 결과가 나타난 경우만 새 이벤트로 봅니다.
+  if (activeResultKey === key) return true;
+
+  activeResultKey = key;
+
+  if (isDuplicateOfLastApplied(key, eventText)) {
+    return true;
+  }
 
   broadcastRoulette(eventText);
-  markApplied(key, eventText, now);
+  markApplied(key, eventText);
   return true;
 }
 
@@ -289,10 +300,13 @@ async function monitorPage(cdp, names) {
       // 실제 중복 여부는 lastAppliedEvent와 DUPLICATE_WINDOW_MS로만 판단합니다.
       const sourceText = changedText ? `${changedText}\n${normalized}` : normalized;
       const events = extractRouletteEvents(sourceText, names);
-      if (events.length === 0) return;
+      if (events.length === 0) {
+        activeResultKey = null;
+        return;
+      }
 
       for (const eventText of events) {
-        if (applyDetectedRoulette(eventText, names)) break;
+        if (handleDetectedRoulette(eventText, names)) break;
       }
     } catch (error) {
       console.log(`[감지 오류] ${error.message}`);
