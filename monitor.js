@@ -11,7 +11,7 @@ const TIMER_FILE = path.join(ROOT, "obs_timer.html");
 const PROFILE_DIR = path.join(ROOT, ".weflab-browser-profile");
 const DEFAULT_NAMES = ["멧돼지", "돼지"];
 const OBS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OBS/30.0.0";
-const DUPLICATE_WINDOW_MS = 5000;
+const DUPLICATE_WINDOW_MS = 7000;
 
 const clients = new Set();
 let lastAppliedEvent = null;
@@ -260,6 +260,10 @@ function markApplied(key, text, now = Date.now()) {
   lastAppliedEvent = { key, text, at: now };
 }
 
+function resetActiveResult() {
+  activeResultKey = null;
+}
+
 function handleDetectedRoulette(eventText, names) {
   const key = getEventKey(eventText, names);
 
@@ -276,6 +280,47 @@ function handleDetectedRoulette(eventText, names) {
   broadcastRoulette(eventText);
   markApplied(key, eventText);
   return true;
+}
+
+function runSelfTest() {
+  const names = ["멧돼지", "돼지"];
+  const base = Date.now();
+  const results = [];
+
+  function simulate(text, offsetMs) {
+    resetActiveResult();
+    const key = getEventKey(text, names);
+    const now = base + offsetMs;
+    const duplicate = isDuplicateOfLastApplied(key, text, now);
+    if (duplicate) {
+      results.push(`[중복 무시] ${text}`);
+      return;
+    }
+
+    markApplied(key, text, now);
+    results.push(`[적용] ${text}`);
+  }
+
+  simulate("돼지 10분", 0);
+  simulate("돼지 10분", 3000);
+  simulate("멧돼지 30분", 4000);
+  simulate("돼지 10분", 5000);
+  simulate("돼지 10분", 11000);
+  simulate("돼지 10분", 13000);
+
+  const expected = [
+    "[적용] 돼지 10분",
+    "[중복 무시] 돼지 10분",
+    "[적용] 멧돼지 30분",
+    "[적용] 돼지 10분",
+    "[중복 무시] 돼지 10분",
+    "[적용] 돼지 10분"
+  ];
+
+  const passed = expected.every((line, index) => results[index] === line);
+  console.log(results.join("\n"));
+  console.log(passed ? "SELF TEST OK" : "SELF TEST FAILED");
+  process.exit(passed ? 0 : 1);
 }
 
 async function monitorPage(cdp, names) {
@@ -301,7 +346,7 @@ async function monitorPage(cdp, names) {
       const sourceText = changedText ? `${changedText}\n${normalized}` : normalized;
       const events = extractRouletteEvents(sourceText, names);
       if (events.length === 0) {
-        activeResultKey = null;
+        resetActiveResult();
         return;
       }
 
@@ -343,6 +388,10 @@ async function main() {
 
   console.log("OBS에는 아래 주소를 브라우저 소스로 넣으세요.");
   console.log(`http://127.0.0.1:${PORT}/timer`);
+}
+
+if (process.argv.includes("--self-test")) {
+  runSelfTest();
 }
 
 main().catch((error) => {
