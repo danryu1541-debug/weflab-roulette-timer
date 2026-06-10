@@ -275,7 +275,7 @@ async function monitorPage(cdp, names) {
     try {
       const text = await cdp.evaluate("document.body ? document.body.innerText : ''");
       const normalized = normalizeText(text);
-      if (!normalized || normalized === lastText) return;
+      if (!normalized) return;
 
       const previous = lastText;
       lastText = normalized;
@@ -283,7 +283,12 @@ async function monitorPage(cdp, names) {
         .split("\n")
         .filter((line) => !previous.includes(line))
         .join("\n");
-      const events = extractRouletteEvents(`${changedText}\n${normalized}`, names);
+
+      // 페이지 전체 텍스트가 이전과 같아도 룰렛 결과는 같은 문구로 반복될 수 있습니다.
+      // 따라서 변경된 줄이 없을 때도 현재 화면 전체를 다시 분석하고,
+      // 실제 중복 여부는 lastAppliedEvent와 DUPLICATE_WINDOW_MS로만 판단합니다.
+      const sourceText = changedText ? `${changedText}\n${normalized}` : normalized;
+      const events = extractRouletteEvents(sourceText, names);
       if (events.length === 0) return;
 
       for (const eventText of events) {
